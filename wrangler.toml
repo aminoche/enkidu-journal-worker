@@ -1,8 +1,7 @@
 name = "enkidu-journal-worker"
-main = "worker.js"
+main = "src/index.js"
 compatibility_date = "2024-10-19"
 
-# Add your KV namespace
 [[kv_namespaces]]
 binding = "USER_DATA"
 id = "c4cf8e9740014f85bc4eb18492b346e9"

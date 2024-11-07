@@ -1,13 +1,22 @@
+import { handleSmsPost } from './handlers/smsHandler.js';
+
 export default {
 	async fetch(request, env, ctx) {
-		// Handle incoming requests directly without Durable Objects
-		const url = new URL(request.url);
-		const from = url.searchParams.get('From') || 'Unknown sender';
-		const body = url.searchParams.get('Body') || 'No message body';
+		try {
+			const url = new URL(request.url);
 
-		console.log(`Received SMS from ${from}: ${body}`);
+			if (request.method === 'POST' && url.pathname === '/sms') {
+				return await handleSmsPost(request, env);
+			}
 
-		// Return a basic response
-		return new Response('SMS received and logged in Enkidu Journal', { status: 200 });
+			if (request.method === 'GET' && url.pathname === '/health') {
+				return new Response('OK', { status: 200 });
+			}
+
+			return new Response('Not Found', { status: 404 });
+		} catch (error) {
+			console.error('Application error:', error);
+			return new Response(error.message, { status: 500 });
+		}
 	},
 };
