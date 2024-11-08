@@ -1,5 +1,5 @@
 import { MemoryService } from '../utils/memory.js';
-import { determineDimension, generateMainCharacterResponse, getNextUncoveredDimension } from '../services/openai.js';
+import { determineDimension, generateMainCharacterResponse, getNextUncoveredDimension, getNextQuestion } from '../services/openai.js';
 import { sendSmsSafely } from '../utils/sms.js';
 import { CONFIG } from '../config/config.js';
 
@@ -56,17 +56,11 @@ export async function handleSmsPost(request, env) {
 		let userContext = await memoryService.getUserContext(from);
 		console.log(`User context: ${JSON.stringify(userContext)}`);
 
-		// Ensure coveredDimensions is initialized
-		if (!userContext.coveredDimensions) {
-			userContext.coveredDimensions = [];
+		// Ensure dimensions is initialized
+		if (!userContext.dimensions) {
+			userContext.dimensions = {};
 		}
-		console.log(`Covered dimensions: ${JSON.stringify(userContext.coveredDimensions)}`);
-
-		// Ensure coveredQuestions is initialized
-		if (!userContext.coveredQuestions) {
-			userContext.coveredQuestions = {};
-		}
-		console.log(`Covered questions: ${JSON.stringify(userContext.coveredQuestions)}`);
+		console.log(`Dimensions: ${JSON.stringify(userContext.dimensions)}`);
 
 		// Check rate limit
 		userContext = await handleRateLimit(userContext);
@@ -74,27 +68,32 @@ export async function handleSmsPost(request, env) {
 
 		// Determine message dimension
 		let dimension;
-		if (userContext.coveredDimensions.length < 8) {
+		if (Object.keys(userContext.dimensions).length < 8) {
 			dimension = getNextUncoveredDimension(userContext);
-			userContext.coveredDimensions.push(dimension);
+			userContext.dimensions[dimension] = { covered: true, questions: [] };
 		} else {
 			dimension = await determineDimension(body, env.OPENAI_API_KEY);
 		}
 		console.log(`Determined dimension: ${dimension}`);
 
-		// Log the state of coveredQuestions for the determined dimension
-		console.log(`Covered questions for ${dimension}: ${JSON.stringify(userContext.coveredQuestions[dimension])}`);
-
 		// Get the last question asked for this dimension
-		const lastQuestion = userContext.coveredQuestions[dimension]?.[userContext.coveredQuestions[dimension].length - 1];
+		const lastQuestionIndex = userContext.dimensions[dimension].questions.length - 1;
+		const lastQuestion = userContext.dimensions[dimension].questions[lastQuestionIndex]?.question;
 		console.log(`Last question for ${dimension}: ${lastQuestion}`);
 
-		// Update user context with the question and answer
-		if (!userContext.answers) {
-			userContext.answers = [];
+		// Update the answer for the last question
+		if (lastQuestion) {
+			userContext.dimensions[dimension].questions[lastQuestionIndex].answer = body;
+			userContext.dimensions[dimension].questions[lastQuestionIndex].timestamp = Date.now();
+		} else {
+			// If no last question, add the answer directly
+			userContext.dimensions[dimension].questions.push({ answer: body, timestamp: Date.now() });
 		}
-		userContext.answers.push({ question: lastQuestion, answer: body });
-		console.log(`Updated answers: ${JSON.stringify(userContext.answers)}`);
+		console.log(`Updated questions for ${dimension}: ${JSON.stringify(userContext.dimensions[dimension].questions)}`);
+
+		// Generate the next question for the dimension
+		const nextQuestion = getNextQuestion(userContext, dimension);
+		console.log(`Next question for dimension ${dimension}: ${nextQuestion}`);
 
 		// Generate AI response
 		const response = await generateMainCharacterResponse(userContext, body, dimension, env.OPENAI_API_KEY);

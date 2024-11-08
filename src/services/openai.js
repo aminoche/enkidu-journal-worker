@@ -6,17 +6,17 @@ import { dimensions } from './dimensions.js';
 function getNextUncoveredDimension(userContext) {
 	const allDimensions = Object.keys(dimensions);
 
-	const uncoveredDimensions = allDimensions.filter((dimension) => !userContext.coveredDimensions.includes(dimension));
+	const uncoveredDimensions = allDimensions.filter((dimension) => !userContext.dimensions[dimension]?.covered);
 
 	return uncoveredDimensions.length > 0 ? uncoveredDimensions[0] : null;
 }
 
 // Get the next question for a dimension
 function getNextQuestion(userContext, dimension) {
-	if (!userContext.coveredQuestions[dimension]) {
-		userContext.coveredQuestions[dimension] = [];
+	if (!userContext.dimensions[dimension]) {
+		userContext.dimensions[dimension] = { covered: false, questions: [] };
 	}
-	const coveredQuestions = userContext.coveredQuestions[dimension];
+	const coveredQuestions = userContext.dimensions[dimension].questions;
 	const dimensionQuestions = questions[dimension];
 
 	if (!dimensionQuestions) {
@@ -30,8 +30,8 @@ function getNextQuestion(userContext, dimension) {
 
 	if (nextQuestionIndex < dimensionQuestions.length) {
 		const nextQuestion = dimensionQuestions[nextQuestionIndex];
-		coveredQuestions.push(nextQuestion);
-		userContext.coveredQuestions[dimension] = coveredQuestions;
+		coveredQuestions.push({ question: nextQuestion, answer: null, timestamp: Date.now() });
+		userContext.dimensions[dimension].questions = coveredQuestions;
 		return nextQuestion;
 	}
 
@@ -192,4 +192,4 @@ async function generateSummaryForDimension(messages, dimension) {
 	return data.choices[0].message.content.trim();
 }
 
-export { determineDimension, generateMainCharacterResponse, generateThematicSummaries, getNextUncoveredDimension };
+export { determineDimension, generateMainCharacterResponse, generateThematicSummaries, getNextUncoveredDimension, getNextQuestion };
