@@ -1,6 +1,3 @@
-import { MEMORY_CONFIG } from '../config/config.js';
-import { generateThematicSummaries } from '../services/openai.js';
-
 export class MemoryService {
 	constructor(userDataStore) {
 		this.userDataStore = userDataStore;
@@ -8,13 +5,18 @@ export class MemoryService {
 
 	async getUserContext(userId) {
 		try {
-			console.log('Fetching user context from KV storage');
 			const context = await this.userDataStore.get(userId);
 			if (context) {
-				console.log('User context found');
-				return JSON.parse(context);
+				const parsedContext = JSON.parse(context);
+				// Ensure coveredDimensions and coveredQuestions are initialized
+				if (!parsedContext.coveredDimensions) {
+					parsedContext.coveredDimensions = [];
+				}
+				if (!parsedContext.coveredQuestions) {
+					parsedContext.coveredQuestions = {};
+				}
+				return parsedContext;
 			}
-			console.log('User context not found, creating new context');
 			return {
 				userId,
 				history: [],
@@ -24,6 +26,9 @@ export class MemoryService {
 				tier: 'low',
 				streak: 0,
 				requestHistory: [],
+				matches: [],
+				coveredDimensions: [], // Initialize coveredDimensions
+				coveredQuestions: {}, // Initialize coveredQuestions
 			};
 		} catch (error) {
 			console.error('Error getting user context:', error);
@@ -33,10 +38,26 @@ export class MemoryService {
 
 	async updateUserContext(userContext) {
 		try {
-			console.log('Updating user context in KV storage');
 			await this.userDataStore.put(userContext.userId, JSON.stringify(userContext));
 		} catch (error) {
 			console.error('Error updating user context:', error);
+			throw error;
+		}
+	}
+
+	// Fetch all users from KV store
+	async getAllUsers() {
+		try {
+			const keys = await this.userDataStore.list();
+			const users = await Promise.all(
+				keys.keys.map(async (key) => {
+					const user = await this.userDataStore.get(key.name);
+					return JSON.parse(user);
+				})
+			);
+			return users;
+		} catch (error) {
+			console.error('Error fetching all users:', error);
 			throw error;
 		}
 	}

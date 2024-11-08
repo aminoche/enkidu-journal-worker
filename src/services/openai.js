@@ -1,18 +1,41 @@
 import { AI_CONFIG } from '../config/config.js';
+import { questions } from './questions.js';
+import { dimensions } from './dimensions.js';
 
-// Map dimension names to user context keys
-function mapDimension(dimension) {
-	const dimensionMap = {
-		'Identity and Values': 'identity',
-		'Key Experiences': 'experiences',
-		'Creative Drive': 'creative',
-		'Family Connections': 'family',
-		'Mental Health': 'mental',
-		'Motivation Growth': 'motivation',
-		'Setbacks Wins': 'setbacks',
-		'Faith Philosophy': 'faith',
-	};
-	return dimensionMap[dimension];
+// Get the next uncovered dimension
+function getNextUncoveredDimension(userContext) {
+	const allDimensions = Object.keys(dimensions);
+
+	const uncoveredDimensions = allDimensions.filter((dimension) => !userContext.coveredDimensions.includes(dimension));
+
+	return uncoveredDimensions.length > 0 ? uncoveredDimensions[0] : null;
+}
+
+// Get the next question for a dimension
+function getNextQuestion(userContext, dimension) {
+	if (!userContext.coveredQuestions[dimension]) {
+		userContext.coveredQuestions[dimension] = [];
+	}
+	const coveredQuestions = userContext.coveredQuestions[dimension];
+	const dimensionQuestions = questions[dimension];
+
+	if (!dimensionQuestions) {
+		throw new Error(`No questions found for dimension: ${dimension}`);
+	}
+
+	const nextQuestionIndex = coveredQuestions.length;
+
+	console.log(`Covered questions for ${dimension}: ${JSON.stringify(coveredQuestions)}`);
+	console.log(`All questions for ${dimension}: ${JSON.stringify(dimensionQuestions)}`);
+
+	if (nextQuestionIndex < dimensionQuestions.length) {
+		const nextQuestion = dimensionQuestions[nextQuestionIndex];
+		coveredQuestions.push(nextQuestion);
+		userContext.coveredQuestions[dimension] = coveredQuestions;
+		return nextQuestion;
+	}
+
+	return null;
 }
 
 // Determine message dimension using OpenAI
@@ -55,14 +78,13 @@ async function determineDimension(smsBody, apiKey) {
 		}
 
 		const dimension = data.choices[0].message.content.trim();
-		const mappedDimension = mapDimension(dimension);
 
-		if (!mappedDimension) {
+		if (!dimensions[dimension]) {
 			console.warn('Unrecognized dimension, retrying...');
 			return await determineDimension(smsBody, apiKey);
 		}
 
-		return mappedDimension;
+		return dimension;
 	} catch (error) {
 		console.error('Error determining dimension:', error);
 		throw error;
@@ -71,6 +93,8 @@ async function determineDimension(smsBody, apiKey) {
 
 // Build main character prompt
 function buildMainCharacterPrompt(userContext, message, dimension) {
+	const nextQuestion = getNextQuestion(userContext, dimension);
+	console.log(`Next question for dimension ${dimension}: ${nextQuestion}`);
 	return `
     Act as an empathetic AI companion helping someone process their thoughts and feelings.
     Consider their message in the context of ${dimension}.
@@ -84,6 +108,8 @@ function buildMainCharacterPrompt(userContext, message, dimension) {
     2. Shows understanding of their situation
     3. Offers gentle guidance or perspective
     4. Encourages further reflection
+    5. Ties back to the dimension of ${dimension}
+    6. Asks the following question: "${nextQuestion}"
 
     Keep the response concise and natural.
   `;
@@ -118,8 +144,52 @@ async function generateMainCharacterResponse(userContext, message, dimension, ap
 
 // Generate thematic summaries
 async function generateThematicSummaries(userContext) {
-	// Implementation for generating thematic summaries
-	// This would analyze user history and generate summaries for each dimension
+	const summaries = {};
+
+	// Group messages by dimension
+	const messagesByDimension = userContext.history.reduce((acc, message) => {
+		const dimension = message.dimension || 'unknown';
+		if (!acc[dimension]) {
+			acc[dimension] = [];
+		}
+		acc[dimension].push(message);
+		return acc;
+	}, {});
+
+	// Generate summaries for each dimension
+	for (const [dimension, messages] of Object.entries(messagesByDimension)) {
+		const summary = await generateSummaryForDimension(messages, dimension);
+		summaries[dimension] = summary;
+	}
+
+	return summaries;
 }
 
-export { determineDimension, generateMainCharacterResponse, generateThematicSummaries, mapDimension };
+// Generate summary for a specific dimension
+async function generateSummaryForDimension(messages, dimension) {
+	const prompt = `
+    Summarize the following messages in the context of ${dimension}:
+    ${messages.map((msg) => msg.content).join('\n')}
+
+    Provide a concise summary that captures the key insights and themes.
+  `;
+
+	const response = await fetch(AI_CONFIG.API_URL, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${AI_CONFIG.API_KEY}`,
+		},
+		body: JSON.stringify({
+			model: AI_CONFIG.MODEL,
+			messages: [{ role: 'system', content: prompt }],
+			max_tokens: AI_CONFIG.MAX_TOKENS,
+			temperature: AI_CONFIG.TEMPERATURE,
+		}),
+	});
+
+	const data = await response.json();
+	return data.choices[0].message.content.trim();
+}
+
+export { determineDimension, generateMainCharacterResponse, generateThematicSummaries, getNextUncoveredDimension };
