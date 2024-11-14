@@ -1,4 +1,5 @@
 import { handleSmsPost } from './handlers/smsHandler.js';
+import { handleVoicePost } from './handlers/voiceHandler.js';
 
 export default {
 	async fetch(request, env, ctx) {
@@ -7,6 +8,10 @@ export default {
 
 			if (request.method === 'POST' && url.pathname === '/sms') {
 				return await handleSmsPost(request, env);
+			}
+
+			if (request.method === 'POST' && url.pathname === '/voice') {
+				return await handleVoicePost(request, env);
 			}
 
 			if (request.method === 'GET' && url.pathname === '/health') {
