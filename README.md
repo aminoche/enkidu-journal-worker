@@ -1,5 +1,9 @@
 # Enkidu Journal Worker
 
+## Try it!
+
+Text and/or call +1-385-336-5438
+
 ## Purpose
 
 The Enkidu Journal Worker is a Cloudflare Worker application designed to understand and engage with users deeply across various dimensions of their identity and experiences. By leveraging the OpenAI API, the application analyzes incoming SMS messages, determines the relevant dimension of the message, and generates thoughtful AI responses. The ultimate goal is for the system to know users so well and in depth across all dimensions that it can match them with an ideal best friend.
